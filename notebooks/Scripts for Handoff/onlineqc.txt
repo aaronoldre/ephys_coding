@@ -1,0 +1,157 @@
+Make/T onlineQCWave = {{"Sweep Number"},{"Clamp Mode"},{"Stim Name"},{"Stim Amplitude"},{"QC Result"},{"Action Potential"}}
+
+Function onlineQC()
+	string panelTitle = "ITC18USB_Dev_0"
+	variable headstage = 0
+	variable sweepNo = AFH_GetLastSweepAcquired(panelTitle)
+	Wave/T onlineQCWave
+	Wave onlineQCWaveResults
+ 	string path
+	
+ 	
+	///use sweep number as index for wave
+ 
+	onlineQCWave[sweepNo + 1][0] = {num2str(sweepNo)}	
+	onlineQCWave[sweepNo + 1][1] = //vrest for sweep
+	if(CmpStr(onlineQCWave[0][7],"")==0)
+		onlineQCWave[0][7] = onlineQCWave[sweepNo + 1][1]
+	endif
+	if(CmpStr(onlineQCWave[0][7],"")==1)
+		if(abs(str2num(onlineQCWave[0][7])-str2num(onlineQCWave[sweepNo + 1][1])) > 2)
+			onlineQCWave[sweepNo + 1][4] = "fail"
+	
+	onlineQCWave[sweepNo + 1][2] = {AFH_GetStimSetName(panelTitle,0,0)}
+	
+	string stimPath, scalePath
+	stimPath = "root:MIES:ITCDevices:ITC18USB:Device0:Data:Sweep_" + num2str(sweepNo)
+	scalePath = "root:MIES:LabNoteBook:ITC18USB:Device0:settingsHistory:sweepSettingsWave"
+	Wave/Z amplitude = $stimPath
+	Wave/z scaleFactor = $scalePath
+
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1RP25PR",0)==0)
+		onlineQCWave[sweepNo + 1][3] = num2str(scaleFactor[0][0]*800)
+	endif
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1SS",0)==0)
+		onlineQCWave[sweepNo + 1][3] =  num2str(amplitude[204200][0])
+	endif
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1LS",0)==0)
+		onlineQCWave[sweepNo + 1][3] = 	num2str(amplitude[204200][0])
+	endif
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1NSSEED",0)==0)
+		onlineQCWave[sweepNo + 1][3] = 	num2str(scaleFactor[0][0]*100)
+	endif
+
+	onlineQCWave[sweepNo + 1][4] = {num2str(AM_PSA_sweepLevelQC(panelTitle, headstage))}
+	if(abs(str2num(onlineQCWave[0][7])-str2num(onlineQCWave[sweepNo + 1][1])) > 2)
+			onlineQCWave[sweepNo + 1][4] = "fail"
+	onlineQCWave[sweepNo + 1][5] = {num2str(AM_PSA_returnActionPotential(panelTitle, headstage))}
+
+	path = "root:MIES:ITCDevices:ITC18USB:Device0:Data:Sweep_" + num2str(sweepNo)
+	
+	
+	///check ramps
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1RP25PR",0)==0)
+		onlineQCWaveResults[0] += 1
+		if(onlineQCWaveResults[0] >=2)
+			onlineQCWave[1][6] = {"Ramps"}
+			onlineQCWave[2][6] = {"Pass"}
+		endif
+	endif
+
+	///check short squares
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1SS",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][4], "1")==0)
+			if(CmpStr(onlineQCWave[sweepNo +1][5], "1")==0)
+				onlineQCWaveResults[1] += 1
+				if(onlineQCWaveResults[2] >=2)
+					onlineQCWave[3][6] = {"Short Squares"}
+					onlineQCWave[4][6] = {"Pass"}
+				endif
+			endif
+		endif
+	endif
+	
+	///check subthreshold long squares
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1LS",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][4], "1")==0)
+			if(CmpStr(onlineQCWave[sweepNo + 1][5],"0")==0)
+				onlineQCWaveResults[2] += 1
+				if(onlineQCWaveResults[2] >=2)
+					onlineQCWave[5][6] = {"SubThreshold"}
+					onlineQCWave[6][6] = {"Pass"}
+				endif
+			endif
+		endif
+	endif
+
+	///Find Rheobase
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1LS",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][4], "1")==0)
+			if(CmpStr(onlineQCWave[8][6],"")==0)
+				if(CmpStr(onlineQCWave[sweepNo + 1][5],"1")==0)
+					onlineQCWave[9][6] = onlineQCWave[sweepNo +1][3]
+					if(CmpStr(onlineQCWave[sweepNo + 1][4],"1")==0)
+						onlineQCWave[7][6] = {"Rheobase"}
+						onlineQCWave[8][6] = {"Pass"}
+					endif
+				endif
+			endif
+		endif
+	endif
+
+	///Find Hero Sweep
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1LS",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][4], "1")==0)
+			if(CmpStr(onlineQCWave[8][6],"Pass")==0)
+				if(CmpStr(onlineQCWave[11][6],"")==0)
+					if(CmpStr(onlineQCWave[sweepNo + 1][5],"1")==0)
+						if(str2num(onlineQCWave[9][6]) + 40 == str2num(onlineQCWave[sweepNo +1][3])==0)
+							onlineQCWave[10][6] = {"Hero Sweep"}
+							onlineQCWave[11][6] = {"Pass"}
+						endif
+						if(str2num(onlineQCWave[9][6]) + 50 == str2num(onlineQCWave[sweepNo +1][3])==0)
+							onlineQCWave[10][6] = {"Hero Sweep"}
+							onlineQCWave[11][6] = {"Pass"}
+						endif
+						if(str2num(onlineQCWave[9][6]) + 60 == str2num(onlineQCWave[sweepNo +1][3])==0)
+							onlineQCWave[10][6] = {"Hero Sweep"}
+							onlineQCWave[11][6] = {"Pass"}
+						endif
+					endif
+				endif
+			endif
+		endif		
+	endif
+
+	///check long squares superthreshold
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1LS",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][4], "1")==0)
+			if(CmpStr(onlineQCWave[sweepNo +1][5], "1")==0)
+				onlineQCWaveResults[4] += 1
+				if(onlineQCWaveResults[4] >=2)
+					if(CmpStr(onlineQCWave[8][6],"Pass")==0)
+						if(CmpStr(onlineQCWave[11][6],"Pass")==0)
+							onlineQCWave[12][6] = {"Long Squares"}
+							onlineQCWave[13][6] = {"Pass"}
+						endif
+					endif
+				endif
+			endif
+		endif
+	endif
+
+	///check noise
+	if(strsearch(onlineQCWave[sweepNo + 1][2], "C1NSSEED",0)==0)
+		if(CmpStr(onlineQCWave[sweepNo +1][5], "1")==0)
+			onlineQCWaveResults[4] += 1
+			if(onlineQCWaveResults[4] >=2)
+				onlineQCWave[14][6] = {"Noises"}
+				onlineQCWave[15][6] = {"Pass"}
+			endif
+		endif
+	endif
+
+End
+ 
+///str2num reverts strings to numbers
+
